@@ -1,0 +1,19 @@
+{
+  "name": "core-service",
+  "version": "1.0.0",
+  "description": "Kafka consumer + moderation/actions",
+  "main": "core-service.js",
+  "scripts": {
+    "start": "node core-service.js",
+    "dev": "node core-service.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "kafkajs": "^2.2.4",
+    "mssql": "^12.5.5"
+  }
+}
