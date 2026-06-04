@@ -1,0 +1,177 @@
+services:
+  kafka:
+    image: redpandadata/redpanda:latest
+    container_name: kafka
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - "1G"
+      - --reserve-memory
+      - "0M"
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - INTERNAL://kafka:9092,EXTERNAL://localhost:19092
+    ports:
+      - "19092:19092"
+      - "9644:9644"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+    depends_on:
+      - kafka
+
+  kafka-exporter:
+    # Monitoring infrastructure, not an application service.
+    profiles: ["monitoring"]
+    image: danielqsj/kafka-exporter:latest
+    container_name: kafka-exporter
+    command:
+      - "--kafka.server=kafka:9092"
+    ports:
+      - "9308:9308"
+    depends_on:
+      - kafka
+
+  prometheus:
+    # Monitoring infrastructure, not an application service.
+    profiles: ["monitoring"]
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    depends_on:
+      - kafka-exporter
+
+  alertmanager:
+    # Monitoring infrastructure, not an application service.
+    profiles: ["monitoring"]
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+    depends_on:
+      - prometheus
+
+  # Webhook + Processing (port 3001)
+  # Consumes HTTP POST from Facebook, publishes raw_events.
+  webhook-service:
+    build: ./webhook-service
+    container_name: webhook-service
+    command: node index.js
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./webhook-service/.env
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - DATA_DIR=/app/data
+      - PORT=3001
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - kafka
+
+  # Core Service (port 3002 in the architecture diagram)
+  # Consumes raw_events, publishes reply_commands/moderation_commands.
+  core-service:
+    build: ./core-service
+    container_name: core-service
+    command: node core-service.js
+    env_file:
+      - ./webhook-service/.env
+      - ./api-service/.env
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - DATA_DIR=/app/data
+      - SERVICE_NAME=core-service
+      - KAFKA_TOPIC_IN=raw_events
+      - KAFKA_TOPIC_REPLY_COMMANDS=reply_commands
+      - KAFKA_TOPIC_MODERATION_COMMANDS=moderation_commands
+      - KAFKA_TOPIC_RESULTS=moderation_results
+      - KAFKA_TOPIC_MANUAL_REVIEW=manual_review
+      - KAFKA_TOPIC_FAILED=send_failed
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - kafka
+
+  # Backend API / API Service (port 3000 in the architecture diagram)
+  # Consumes reply_commands/moderation_commands/send_retry.
+  # Publishes send_failed when Facebook sending fails.
+  api-service:
+    build: ./api-service
+    container_name: api-service
+    command: node api-service.js
+    env_file:
+      - ./webhook-service/.env
+      - ./api-service/.env
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - DATA_DIR=/app/data
+      - API_SERVICE_NAME=api-service
+      - API_KAFKA_GROUP_ID=api-service-v1
+      - API_PORT=3000
+      - FB_CIRCUIT_FAILURE_THRESHOLD=5
+      - FB_CIRCUIT_RESET_TIMEOUT_MS=30000
+      - KAFKA_TOPIC_REPLY_COMMANDS=reply_commands
+      - KAFKA_TOPIC_MODERATION_COMMANDS=moderation_commands
+      - KAFKA_TOPIC_SEND_RETRY=send_retry
+      - KAFKA_TOPIC_FAILED=send_failed
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - kafka
+      - core-service
+
+  # Retry Service (port 3003 in the architecture diagram)
+  # Consumes send_failed, publishes send_retry or dead_letter.
+  retry-service:
+    build: ./retry-service
+    container_name: retry-service
+    command: node retry-service.js
+    env_file:
+      - ./webhook-service/.env
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - RETRY_SERVICE_NAME=retry-service
+      - RETRY_KAFKA_GROUP_ID=retry-service-v1
+      - RETRY_PORT=3003
+      - KAFKA_TOPIC_FAILED=send_failed
+      - KAFKA_TOPIC_SEND_RETRY=send_retry
+      - KAFKA_TOPIC_DEAD_LETTER=dead_letter
+      - MAX_RETRY_COUNT=3
+      - SEND_RETRY_BASE_DELAY_MS=1000
+    depends_on:
+      - kafka
+      - api-service
+
+volumes:
+  redpanda_data:
+  prometheus_data:

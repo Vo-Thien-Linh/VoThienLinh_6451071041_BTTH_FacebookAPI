@@ -1,0 +1,8 @@
+{
+    "error": {
+        "message": "(#200) To subscribe to the messages field, one of these permissions is needed: pages_messaging",
+        "type": "OAuthException",
+        "code": 200,
+        "fbtrace_id": "ATzs5sHF1d-J8WUUWekb7Xh"
+    }
+}

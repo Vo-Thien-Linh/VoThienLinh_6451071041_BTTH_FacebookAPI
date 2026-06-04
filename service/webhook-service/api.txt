@@ -1,0 +1,1 @@
+curl -X POST "https://graph.facebook.com/v23.0/1106264275900433/subscribed_apps?subscribed_fields=feed" -H "Authorization: Bearer EAAfbo2KIdscBRaLdJcMhT6kOJFT3AZBPKt9kmKQlN1I9FgAmcqSqCSaK9uYmyFY07RQrUw92Uc9R4Y01TuCrCxYemBZAzUFj00kg1GVn8ZB7Xjs2NhthvBrp4FIw4x4wzE5GVcZCxzsBDZCb8TXCk35osrZCvIMuBEZBZBBHL31Usy7z3HGA5zUwyZAvd0qQ4cRl3rcIXkIDG"
