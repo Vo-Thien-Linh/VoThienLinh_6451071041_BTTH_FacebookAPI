@@ -1,0 +1,19 @@
+{
+  "name": "api-service",
+  "version": "1.0.0",
+  "description": "Consumes reply_commands/moderation_commands/send_retry and performs Facebook actions with idempotency",
+  "main": "api-service.js",
+  "scripts": {
+    "start": "node api-service.js",
+    "dev": "node api-service.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "kafkajs": "^2.2.4",
+    "mssql": "^12.5.5"
+  }
+}
