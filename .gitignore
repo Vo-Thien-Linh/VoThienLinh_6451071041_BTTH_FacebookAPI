@@ -17,3 +17,6 @@ build/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local Alertmanager config with email/app password
+alertmanager/alertmanager.yml
