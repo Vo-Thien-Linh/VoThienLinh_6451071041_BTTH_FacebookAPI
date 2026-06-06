@@ -63,7 +63,8 @@ class UserStore {
       at: meta?.at || new Date().toISOString(),
       reason: meta?.reason || [],
     };
-    this.#dirty();
+    this.flush();
+    this._dirty = 0;
   }
 
   recordAndCountRepeat(actorId, textHash, nowMs) {

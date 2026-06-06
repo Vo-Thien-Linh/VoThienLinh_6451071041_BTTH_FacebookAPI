@@ -2,6 +2,14 @@
 
 const sql = require("mssql");
 
+function isRunningInDocker() {
+  try {
+    return require("fs").existsSync("/.dockerenv");
+  } catch {
+    return false;
+  }
+}
+
 function parseServer(value) {
   const raw = String(value || "").trim();
   if (!raw) return { server: null, instanceName: null };
@@ -11,6 +19,9 @@ function parseServer(value) {
 }
 
 const parsedServer = parseServer(process.env.DB_HOST);
+if (!isRunningInDocker() && parsedServer.server === "host.docker.internal") {
+  parsedServer.server = "127.0.0.1";
+}
 
 const config = {
   server: parsedServer.server,

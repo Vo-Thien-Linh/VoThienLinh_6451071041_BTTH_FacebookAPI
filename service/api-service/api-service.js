@@ -13,23 +13,25 @@
 const path = require("path");
 const fs = require("fs");
 
-const envCandidates = [
+const envFiles = [
   path.join(__dirname, ".env"),
   path.join(__dirname, "..", ".env"),
   path.join(__dirname, "..", "webhook-service", ".env"),
 ];
 
-const envPath = envCandidates.find((p) => {
+let loadedEnv = false;
+for (const envFile of envFiles) {
   try {
-    return fs.existsSync(p);
+    if (fs.existsSync(envFile)) {
+      require("dotenv").config({ path: envFile });
+      loadedEnv = true;
+    }
   } catch {
-    return false;
+    // ignore
   }
-});
+}
 
-if (envPath) {
-  require("dotenv").config({ path: envPath });
-} else {
+if (!loadedEnv) {
   require("dotenv").config();
 }
 

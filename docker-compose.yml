@@ -62,6 +62,7 @@ services:
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
     depends_on:
       - kafka-exporter
 
@@ -82,13 +83,13 @@ services:
   # Webhook + Processing (port 3001)
   # Consumes HTTP POST from Facebook, publishes raw_events.
   webhook-service:
-    build: ./webhook-service
+    build: ./service/webhook-service
     container_name: webhook-service
     command: node index.js
     ports:
       - "3001:3001"
     env_file:
-      - ./webhook-service/.env
+      - ./service/webhook-service/.env
     environment:
       - KAFKA_BROKER=kafka:9092
       - DATA_DIR=/app/data
@@ -101,12 +102,12 @@ services:
   # Core Service (port 3002 in the architecture diagram)
   # Consumes raw_events, publishes reply_commands/moderation_commands.
   core-service:
-    build: ./core-service
+    build: ./service/core-service
     container_name: core-service
     command: node core-service.js
     env_file:
-      - ./webhook-service/.env
-      - ./api-service/.env
+      - ./service/webhook-service/.env
+      - ./service/api-service/.env
     environment:
       - KAFKA_BROKER=kafka:9092
       - DATA_DIR=/app/data
@@ -126,12 +127,12 @@ services:
   # Consumes reply_commands/moderation_commands/send_retry.
   # Publishes send_failed when Facebook sending fails.
   api-service:
-    build: ./api-service
+    build: ./service/api-service
     container_name: api-service
     command: node api-service.js
     env_file:
-      - ./webhook-service/.env
-      - ./api-service/.env
+      - ./service/webhook-service/.env
+      - ./service/api-service/.env
     environment:
       - KAFKA_BROKER=kafka:9092
       - DATA_DIR=/app/data
@@ -153,11 +154,11 @@ services:
   # Retry Service (port 3003 in the architecture diagram)
   # Consumes send_failed, publishes send_retry or dead_letter.
   retry-service:
-    build: ./retry-service
+    build: ./service/retry-service
     container_name: retry-service
     command: node retry-service.js
     env_file:
-      - ./webhook-service/.env
+      - ./service/webhook-service/.env
     environment:
       - KAFKA_BROKER=kafka:9092
       - RETRY_SERVICE_NAME=retry-service
@@ -168,6 +169,7 @@ services:
       - KAFKA_TOPIC_DEAD_LETTER=dead_letter
       - MAX_RETRY_COUNT=3
       - SEND_RETRY_BASE_DELAY_MS=1000
+      - RETRY_NON_RETRYABLE_ERRORS=true
     depends_on:
       - kafka
       - api-service

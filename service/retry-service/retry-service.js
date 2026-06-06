@@ -56,6 +56,7 @@ const FROM_BEGINNING = String(process.env.KAFKA_FROM_BEGINNING || "").toLowerCas
 const PARTITIONS_CONCURRENTLY = Number(process.env.PARTITIONS_CONCURRENTLY || 1);
 const MAX_MESSAGES_PER_BATCH = Number(process.env.MAX_MESSAGES_PER_BATCH || 50);
 const MAX_RETRY_COUNT = Number(process.env.MAX_RETRY_COUNT || 3);
+const RETRY_NON_RETRYABLE_ERRORS = String(process.env.RETRY_NON_RETRYABLE_ERRORS || "").toLowerCase() === "true";
 
 const kafka = new Kafka({
   clientId: SERVICE_NAME,
@@ -108,6 +109,7 @@ function retryDelayMs(retryCount) {
 }
 
 function isRetryableFailure(failure) {
+  if (RETRY_NON_RETRYABLE_ERRORS) return true;
   if (failure?.error?.retryable === true) return true;
   if (failure?.error?.retryable === false) return false;
   if (failure?.error?.circuitOpen) return true;
@@ -201,6 +203,7 @@ async function start() {
   console.log(`[${SERVICE_NAME}] brokers=${(KAFKA_BROKERS.length ? KAFKA_BROKERS : [KAFKA_BROKER]).join(",")} groupId=${GROUP_ID}`);
   console.log(`[${SERVICE_NAME}] consuming: ${KAFKA_TOPIC_FAILED}`);
   console.log(`[${SERVICE_NAME}] publishing: ${KAFKA_TOPIC_SEND_RETRY}, ${KAFKA_TOPIC_DEAD_LETTER}`);
+  console.log(`[${SERVICE_NAME}] maxRetry=${MAX_RETRY_COUNT} retryNonRetryableErrors=${RETRY_NON_RETRYABLE_ERRORS}`);
 
   await producer.connect();
   await consumer.connect();

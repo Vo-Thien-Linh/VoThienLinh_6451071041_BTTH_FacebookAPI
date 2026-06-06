@@ -2,19 +2,27 @@
 
 const path = require("path");
 const fs = require("fs");
-const envCandidates = [
+
+const envFiles = [
   path.join(__dirname, ".env"),
   path.join(__dirname, "..", ".env"),
   path.join(__dirname, "..", "webhook-service", ".env"),
+  path.join(__dirname, "..", "api-service", ".env"),
 ];
 
-const envPath = envCandidates.find((p) => {
-  try { return fs.existsSync(p); } catch { return false; }
-});
+let loadedEnv = false;
+for (const envFile of envFiles) {
+  try {
+    if (fs.existsSync(envFile)) {
+      require("dotenv").config({ path: envFile });
+      loadedEnv = true;
+    }
+  } catch {
+    // ignore
+  }
+}
 
-if (envPath) {
-  require("dotenv").config({ path: envPath });
-} else {
+if (!loadedEnv) {
   require("dotenv").config();
 }
 
@@ -89,6 +97,8 @@ const MAX_MESSAGES_PER_BATCH  = Number(process.env.MAX_MESSAGES_PER_BATCH || 50)
 // which moderation action to perform (hide vs delete). The actual API call is
 // done by api-service.
 const FB_SPAM_ACTION = String(process.env.FB_SPAM_ACTION || "hide").toLowerCase();
+const RATE_LIMIT_ACTION = String(process.env.RATE_LIMIT_ACTION || "pending_review").toLowerCase();
+const SPAM_BLACKLIST_REPEAT_THRESHOLD = Math.max(1, Number(process.env.SPAM_BLACKLIST_REPEAT_THRESHOLD || 3));
 
 // ─── Kafka Client ─────────────────────────────────────────────────────────────
 const kafka = new Kafka({
@@ -209,9 +219,9 @@ function decide({ spam, aiResult, isBlacklisted, replyMode, commentText }) {
     ? Number(spam.repeatSpamCount24hEffective)
     : Number(spam.repeatSpamCount24h) || 0;
 
-  if (repeatForDecision >= 3) {
+  if (repeatForDecision >= SPAM_BLACKLIST_REPEAT_THRESHOLD) {
     decision.blacklistUser = true;
-    decision.reason.push("spam_repeat_3_in_24h");
+    decision.reason.push(`spam_repeat_${SPAM_BLACKLIST_REPEAT_THRESHOLD}_in_24h`);
   }
 
   if (!isBlacklisted && !decision.blacklistUser && !spam.isSpamLight && !spam.isMaliciousLink) {
@@ -336,7 +346,7 @@ async function processEvent(ev) {
     userStore,
   });
 
-  if (spam.isHighRate) {
+  if (spam.isHighRate && RATE_LIMIT_ACTION !== "moderate") {
     const decision = {
       hideComment: false,
       enqueueManualReview: true,

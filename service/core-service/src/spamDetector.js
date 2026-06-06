@@ -83,11 +83,17 @@ function detectSpam({ text, actorId, now, userStore }) {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 
+  const spamKeywords = (process.env.SPAM_KEYWORDS || "spam,scam,quang cao,quảng cáo,kiem tien,kiếm tiền,inbox ngay")
+    .split(",")
+    .map((s) => normalizeText(s).trim())
+    .filter(Boolean);
+
   const hostnames = links.map(tryGetHostname).filter(Boolean);
   const isMaliciousLink = hostnames.some((h) => maliciousDomains.includes(h) || maliciousDomains.some((d) => h === d || h.endsWith(`.${d}`)));
 
   // Basic bot-like heuristics (minimal): very long repeated characters or many links.
   const isBotLikely = links.length >= 3 || /(.)\1{12,}/.test(normalized);
+  const isSpamKeyword = spamKeywords.some((kw) => normalized === kw || normalized.includes(kw));
 
   const hasLink = links.length > 0;
 
@@ -98,8 +104,13 @@ function detectSpam({ text, actorId, now, userStore }) {
   const isHighRate = Number.isFinite(rateThreshold) ? commentRateCount >= rateThreshold : false;
 
   const ignoreRepeatAsSpam = isLowValuePing(normalized);
-  const repeatSpamCount24hEffective = ignoreRepeatAsSpam ? 0 : repeatSpamCount24h;
-  const isSpamLight = (treatLinkAsSpamLight && hasLink) || repeatSpamCount24hEffective >= 2 || isHighRate;
+  const lowValuePingRepeatLimit = Number(process.env.LOW_VALUE_PING_REPEAT_LIMIT || 3);
+  const shouldIgnoreLowValueRepeat =
+    ignoreRepeatAsSpam &&
+    Number.isFinite(lowValuePingRepeatLimit) &&
+    repeatSpamCount24h < lowValuePingRepeatLimit;
+  const repeatSpamCount24hEffective = shouldIgnoreLowValueRepeat ? 0 : repeatSpamCount24h;
+  const isSpamLight = isSpamKeyword || (treatLinkAsSpamLight && hasLink) || repeatSpamCount24hEffective >= 2 || isHighRate;
 
   return {
     normalized,
@@ -112,10 +123,13 @@ function detectSpam({ text, actorId, now, userStore }) {
     isHighRate,
     repeatSpamCount24h,
     repeatSpamCount24hEffective,
+    lowValuePingRepeatLimit: ignoreRepeatAsSpam ? lowValuePingRepeatLimit : null,
     isMaliciousLink,
     isBotLikely,
+    isSpamKeyword,
     isSpamLight,
     reasons: [
+      isSpamKeyword ? "spam_keyword" : null,
       hasLink ? "contains_link" : null,
       isHighRate ? "high_rate" : null,
       repeatSpamCount24hEffective >= 2 ? "repeat_content" : null,

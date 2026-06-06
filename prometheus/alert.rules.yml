@@ -2,13 +2,13 @@ groups:
   - name: kafka_alerts
     rules:
       - alert: DeadLetterQueueReceived
-        expr: increase(kafka_topic_partition_current_offset{topic="dead_letter"}[1m]) > 0
+        expr: kafka_topic_partition_current_offset{topic="dead_letter"} > 0
         for: 0m
         labels:
           severity: critical
         annotations:
           summary: "Message moi vao Dead Letter Queue"
-          description: "Topic dead_letter vua nhan them message. Kiem tra Kafka UI tai http://localhost:8080 de xem noi dung va xu ly thu cong."
+          description: "Topic dead_letter dang co message. Kiem tra Kafka UI tai http://localhost:8080 de xem noi dung va xu ly thu cong."
 
       - alert: KafkaConsumerLagHigh
         expr: kafka_consumergroup_lag > 500
